@@ -2,6 +2,8 @@
 
 Upload PDFs, then ask questions about them. Answers come from the retrieved chunks only. When the PDFs don't contain the answer, the model says so instead of making one up. Chunk size and top_k were chosen from a labeled eval set, not by eye.
 
+**Live demo:** http://3.147.158.87. Ask about the preloaded guide, *How to Build a One Person AI Business in 2026*. Try "How long should the smallest valuable product take to ship?"
+
 ## Architecture
 
 ```mermaid
