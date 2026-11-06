@@ -1,0 +1,28 @@
+{"q": "What positioning does the guide recommend instead of AI builder or automation technician?", "must": ["partner"]}
+{"q": "What are the three outcomes businesses pay for?", "must": ["customer", "worth more|value", "cost"]}
+{"q": "What is the price range for a Rung 0 education or consulting session?", "must": ["100", "500"]}
+{"q": "What session price is a practical default for a beginner?", "must": ["200"]}
+{"q": "What is the starting price range for an audit?", "must": ["500", "3000"]}
+{"q": "What is the price range for a focused project?", "must": ["2500", "10000"]}
+{"q": "What is the price range for a monthly retainer?", "must": ["3000", "10000"]}
+{"q": "What are the four rungs of the service ladder?", "must": ["education|consulting", "audit", "project", "retainer"]}
+{"q": "According to the Capgemini research cited, what percentage of AI projects move from proof of concept into production?", "must": ["13"]}
+{"q": "In the IBM CEO study, what percentage of workers reportedly used AI regularly?", "must": ["25"]}
+{"q": "In the IBM CEO study, what percentage of CEOs believed their teams were ready?", "must": ["86"]}
+{"q": "How large is the gap between CEO belief and worker AI use in the IBM study?", "must": ["61"]}
+{"q": "What is the goal for the first month when finding clients?", "must": ["five|5", "conversation"]}
+{"q": "What are the four blanks in the four blank test?", "must": ["bucket", "kpi|metric", "baseline", "target"]}
+{"q": "Over how many days is the target in the four blank test measured?", "must": ["60"]}
+{"q": "What system does the guide suggest building first for your own business?", "must": ["morning brief"]}
+{"q": "What is the client acquisition hierarchy, in order?", "must": ["warm", "upwork", "public"]}
+{"q": "What should you race to instead of your first yes?", "must": ["10|ten", "no"]}
+{"q": "By how much did demand for AI integration work grow according to Upwork's report?", "must": ["178"]}
+{"q": "How much more per hour did AI enabled freelancers reportedly earn?", "must": ["40"]}
+{"q": "What revenue uplift did AI high performers see in the McKinsey report?", "must": ["3", "15"]}
+{"q": "In the case study example, ticket resolution went from 75% to 87%. What is the relative improvement?", "must": ["16"]}
+{"q": "What annual revenue do two clients paying $5,000 per month for 12 months produce?", "must": ["120000"]}
+{"q": "How long should the smallest valuable product take to ship?", "must": ["two weeks|2 weeks"]}
+{"q": "How long can work that took about two hours in n8n take with Claude Code?", "must": ["20", "30"]}
+{"q": "What CRM software does the guide recommend?", "unanswerable": true}
+{"q": "How much does an AIS Plus membership cost per month?", "unanswerable": true}
+{"q": "What year was Nate Herk's company founded?", "unanswerable": true}

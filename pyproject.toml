@@ -1,0 +1,30 @@
+[project]
+name = "prag"
+version = "0.1.0"
+description = "PDF question answering with a measured RAG pipeline"
+readme = "README.md"
+authors = [
+    { name = "Tamer979", email = "giannisdunk@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.162.0",
+    "inngest>=0.5.20",
+    "llama-index-readers-file>=0.7.0",
+    "openai>=3.45.0",
+    "python-dotenv>=1.2.4",
+    "qdrant-client>=1.20.0",
+    "streamlit>=1.66.1",
+    "uvicorn>=0.54.0",
+]
+
+[project.scripts]
+prag = "prag:main"
+
+[build-system]
+requires = ["uv_build>=0.13.7,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.uv]
+# nltk refuses hardlinked data files (llama_index stopwords); uv hardlinks by default.
+link-mode = "copy"

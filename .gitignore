@@ -1,0 +1,18 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Secrets and local data
+.env
+qdrant_storage/
+uploads/
+
+# Raw per-run eval logs (summarized in evals/RESULTS.md)
+evals/results/

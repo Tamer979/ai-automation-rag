@@ -1,0 +1,48 @@
+# Production stack for one server. Only Caddy is reachable from outside; Qdrant is Qdrant Cloud.
+# Needs in .env: OPENAI_API_KEY, QDRANT_URL, QDRANT_API_KEY, INNGEST_EVENT_KEY, INNGEST_SIGNING_KEY (hex),
+# and SITE_ADDRESS (your domain) for HTTPS; without it the site is plain HTTP on port 80.
+services:
+  api:
+    build: .
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    env_file: .env
+    environment:
+      INNGEST_DEV: "0"
+      INNGEST_BASE_URL: http://inngest:8288
+      INNGEST_EVENT_KEY: ${INNGEST_EVENT_KEY}
+      INNGEST_SIGNING_KEY: ${INNGEST_SIGNING_KEY}
+    restart: unless-stopped
+
+  inngest:
+    image: inngest/inngest
+    command: inngest start --event-key ${INNGEST_EVENT_KEY} --signing-key ${INNGEST_SIGNING_KEY} -u http://api:8000/api/inngest
+    depends_on: [api]
+    restart: unless-stopped
+
+  streamlit:
+    build: .
+    command: streamlit run streamlit_app.py --server.address 0.0.0.0 --server.port 8501 --server.headless true
+    env_file: .env
+    environment:
+      INNGEST_DEV: "0"
+      INNGEST_BASE_URL: http://inngest:8288
+      INNGEST_EVENT_KEY: ${INNGEST_EVENT_KEY}
+      INNGEST_SIGNING_KEY: ${INNGEST_SIGNING_KEY}
+      INNGEST_API_BASE: http://inngest:8288/v1
+      ALLOW_UPLOADS: "0"
+    depends_on: [inngest]
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    ports: ["80:80", "443:443"]
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+    depends_on: [streamlit]
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
