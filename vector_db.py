@@ -9,8 +9,9 @@ load_dotenv()
 
 class QdrantStorage:
     # Unset QDRANT_URL means local Docker Qdrant; set it (plus QDRANT_API_KEY) for Qdrant Cloud.
+    # The key is stripped because a pasted trailing space/newline makes httpx reject the header.
     def __init__(self, url = os.getenv("QDRANT_URL", "http://localhost:6333"), collection = "docs", dim = 3072):
-        self.client = QdrantClient (url = url, api_key = os.getenv("QDRANT_API_KEY"), timeout = 30)
+        self.client = QdrantClient (url = url, api_key = (os.getenv("QDRANT_API_KEY") or "").strip() or None, timeout = 30)
         self.collection = collection
         if not self.client.collection_exists(self.collection):
             self.client.create_collection(
