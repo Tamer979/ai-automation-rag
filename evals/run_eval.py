@@ -4,6 +4,7 @@ Usage (repo root, Qdrant running):  uv run python -m evals.run_eval [evals/op_ai
 Calls the pipeline directly, not through Inngest, so the app's query rate limit doesn't apply.
 """
 import json
+import os
 import sys
 import time
 from datetime import datetime
@@ -37,7 +38,7 @@ def grade(case: dict, answer: str, contexts: list[str]) -> tuple[bool, bool | No
     return passes(answer, case["must"]), passes(" ".join(contexts), case["must"])
 
 
-def main(path: str = "evals/op_ai_business.jsonl", top_k: int = 4) -> None:
+def main(path: str = "evals/op_ai_business.jsonl", top_k: int = 4) -> int:
     cases = [json.loads(line) for line in Path(path).read_text(encoding="utf-8").splitlines() if line.strip()]
     client, store = OpenAI(), QdrantStorage()
     rows = []
@@ -68,7 +69,12 @@ def main(path: str = "evals/op_ai_business.jsonl", top_k: int = 4) -> None:
     out.parent.mkdir(exist_ok=True)
     out.write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
     print(f"Saved: {out}")
+    return sum(r["pass"] for r in rows)
 
 
 if __name__ == "__main__":
-    main(*sys.argv[1:2], *map(int, sys.argv[2:3]))
+    passed = main(*sys.argv[1:2], *map(int, sys.argv[2:3]))
+    # CI sets EVAL_MIN_PASS so a quality drop fails the build.
+    min_pass = int(os.getenv("EVAL_MIN_PASS", "0"))
+    if passed < min_pass:
+        sys.exit(f"Eval failed: {passed} passed, need at least {min_pass}")

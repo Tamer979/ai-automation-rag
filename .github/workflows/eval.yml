@@ -1,0 +1,26 @@
+name: RAG eval
+
+# Push to main only (not pull_request), so forks can never run with the repo's API keys.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      QDRANT_URL: ${{ secrets.QDRANT_URL }}
+      QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+      # 28 questions; allow 1 miss because answers vary slightly run to run (temperature 0.2).
+      EVAL_MIN_PASS: "27"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - name: Grader unit test
+        run: uv run python -m evals.test_run_eval
+      - name: Eval against the live Qdrant index
+        run: uv run python -m evals.run_eval

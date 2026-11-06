@@ -22,6 +22,7 @@ inngest_client = inngest.Inngest(
 )
 
 CHAT_MODEL = "gpt-4o-mini"
+MAX_QUESTION_CHARS = 500  # caps cost per request; streamlit_app.py enforces the same limit in the UI
 
 
 # Shared with evals/run_eval.py so the eval tests the exact prompt the app uses.
@@ -31,10 +32,10 @@ def build_messages(question: str, contexts: list[str]) -> list[dict]:
         "Use the following context to answer the question.\n\n"
         f"Context:\n{context_block}\n\n"
         f"Question: {question}\n"
-        "Answer conciesly using the context above."
+        "Answer concisely using the context above."
     )
     return [
-        {"role": "system", "content": "You are a Ai assistant for an AI automation agency. Answer the question using the context provided."},
+        {"role": "system", "content": "You are an AI assistant for an AI automation agency. Answer the question using the context provided."},
         {"role": "user", "content": user_content}
     ]
 
@@ -88,7 +89,9 @@ async def rag_query_pdf_ai(ctx: inngest.Context):
         return RAGSearchResult(contexts = found["contexts"], sources = found["sources"])
 
     question = ctx.event.data["question"]
-    top_k = int (ctx.event.data.get("top_k", 4))
+    if len(question) > MAX_QUESTION_CHARS:
+        raise inngest.NonRetriableError(f"Question longer than {MAX_QUESTION_CHARS} characters")
+    top_k = min(max(int(ctx.event.data.get("top_k", 4)), 1), 20)  # same 1-20 range as the UI
 
     found = await ctx.step.run("embed-and-search", lambda: _search(question, top_k), output_type = RAGSearchResult) 
 

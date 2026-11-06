@@ -1,5 +1,7 @@
 # PRAG: PDF question answering with a measured RAG pipeline
 
+[![RAG eval](https://github.com/Tamer979/prag/actions/workflows/eval.yml/badge.svg)](https://github.com/Tamer979/prag/actions/workflows/eval.yml)
+
 Upload PDFs, then ask questions about them. Answers come from the retrieved chunks only. When the PDFs don't contain the answer, the model says so instead of making one up. Chunk size and top_k were chosen from a labeled eval set, not by eye.
 
 **Live demo:** http://3.147.158.87. Ask about the preloaded guide, *How to Build a One Person AI Business in 2026*. Try "How long should the smallest valuable product take to ship?"
@@ -104,3 +106,5 @@ Reproduce (needs Qdrant running with the source PDF ingested):
 uv run python -m evals.test_run_eval   # grader unit test
 uv run python -m evals.run_eval        # top_k=4; per-question results go to evals/results/
 ```
+
+A GitHub Action ([.github/workflows/eval.yml](.github/workflows/eval.yml)) runs the eval against the live index on every push to `main`. It fails the build if fewer than 27 of 28 questions pass.

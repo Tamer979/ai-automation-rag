@@ -113,7 +113,7 @@ def wait_for_run_output(event_id: str, timeout_s: float = 120.0, poll_interval_s
 
 
 with st.form("rag_query_form"):
-    question = st.text_input("Your question")
+    question = st.text_input("Your question", max_chars=500)
     top_k = st.number_input("How many chunks to retrieve", min_value=1, max_value=20, value=4, step=1)
     submitted = st.form_submit_button("Ask")
 
