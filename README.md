@@ -1,4 +1,4 @@
-#AI Automation Q&A: a production-grade RAG app with measured retrieval quality
+## AI Automation Q&A: a production-grade RAG app with measured retrieval quality
 
 [![RAG eval](https://github.com/Tamer979/prag/actions/workflows/eval.yml/badge.svg)](https://github.com/Tamer979/prag/actions/workflows/eval.yml)
 
