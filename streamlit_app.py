@@ -11,7 +11,7 @@ import requests
 
 load_dotenv()
 
-st.set_page_config(page_title="RAG Ingest PDF", page_icon="📄", layout="centered")
+st.set_page_config(page_title="AI Automation for Business Q&A", page_icon="🤖", layout="centered")
 st.session_state.setdefault("session_id", str(uuid.uuid4()))
 
 
@@ -59,7 +59,7 @@ if os.getenv("ALLOW_UPLOADS", "1") == "1":
 
     st.divider()
 
-st.title("Ask a question about your PDFs")
+st.title("Ask anything about AI automation for businesses")
 
 
 async def send_rag_query_event(question: str, top_k: int) -> None:
