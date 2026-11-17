@@ -22,7 +22,8 @@ flowchart LR
 ```
 
 - **Ingest:** the PDF is saved, then split into 512-token chunks with 100-token overlap. Each chunk is embedded and upserted to Qdrant. Point IDs are deterministic, so re-uploading a file overwrites its chunks instead of duplicating them.
-- **Query:** the question is embedded and the top 4 chunks are retrieved. `gpt-4o-mini` answers from those chunks.
+- **Query:** the question is embedded and the top 4 chunks are retrieved. `gpt-4o-mini` answers from those chunks. The chunk count (`TOP_K` in `main.py`) is fixed in the backend, so users can't change it.
+- **Frontend:** a clean, ChatGPT-style Streamlit page. Questions go in a chat box pinned to the bottom, and the answer appears as a chat message with its sources in a collapsible section. PDF uploads live in the sidebar, and a light theme in `.streamlit/config.toml` handles the look without custom CSS.
 - **Why Inngest:** each step (embed-and-search, LLM call) is retried and logged on its own. Queries are throttled per session (1 every 5 s) and rate limited per session (4 every 4 h).
 
 ## Setup

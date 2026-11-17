@@ -23,6 +23,7 @@ inngest_client = inngest.Inngest(
 
 CHAT_MODEL = "gpt-4o-mini"
 MAX_QUESTION_CHARS = 500  # caps cost per request; streamlit_app.py enforces the same limit in the UI
+TOP_K = 4  # chunks retrieved per question; picked by the eval (evals/RESULTS.md), not settable from the UI
 
 
 # Shared with evals/run_eval.py so the eval tests the exact prompt the app uses.
@@ -82,7 +83,7 @@ async def rag_ingest_file(ctx: inngest.Context):
     
 )
 async def rag_query_pdf_ai(ctx: inngest.Context):
-    def _search(question: str, top_k: int = 4) -> RAGSearchResult:
+    def _search(question: str, top_k: int) -> RAGSearchResult:
         query_vec = embed_texts([question])[0]
         store = QdrantStorage()
         found = store.search(query_vec, top_k)
@@ -91,9 +92,8 @@ async def rag_query_pdf_ai(ctx: inngest.Context):
     question = ctx.event.data["question"]
     if len(question) > MAX_QUESTION_CHARS:
         raise inngest.NonRetriableError(f"Question longer than {MAX_QUESTION_CHARS} characters")
-    top_k = min(max(int(ctx.event.data.get("top_k", 4)), 1), 20)  # same 1-20 range as the UI
 
-    found = await ctx.step.run("embed-and-search", lambda: _search(question, top_k), output_type = RAGSearchResult) 
+    found = await ctx.step.run("embed-and-search", lambda: _search(question, TOP_K), output_type = RAGSearchResult)
 
     adapter = ai.openai.Adapter(
         auth_key=os.getenv("OPENAI_API_KEY"),

@@ -44,32 +44,34 @@ async def send_rag_ingest_event(pdf_path: Path) -> None:
 
 # Off on the public server (docker-compose sets ALLOW_UPLOADS=0): every upload lands in the one shared index.
 if os.getenv("ALLOW_UPLOADS", "1") == "1":
-    st.title("Upload a PDF to Ingest")
-    uploaded = st.file_uploader("Choose a PDF", type=["pdf"], accept_multiple_files=False)
+    with st.sidebar:
+        st.header("Documents")
+        uploaded = st.file_uploader("Upload a PDF", type=["pdf"], accept_multiple_files=False)
 
-    if uploaded is not None:
-        with st.spinner("Uploading and triggering ingestion..."):
-            path = save_uploaded_pdf(uploaded)
-            # Kick off the event and block until the send completes
-            asyncio.run(send_rag_ingest_event(path))
-            # Small pause for user feedback continuity
-            time.sleep(0.3)
-        st.success(f"Triggered ingestion for: {path.name}")
-        st.caption("You can upload another PDF if you like.")
+        if uploaded is not None:
+            with st.spinner("Uploading and triggering ingestion..."):
+                path = save_uploaded_pdf(uploaded)
+                # Kick off the event and block until the send completes
+                asyncio.run(send_rag_ingest_event(path))
+                # Small pause for user feedback continuity
+                time.sleep(0.3)
+            st.success(f"Triggered ingestion for: {path.name}")
+            st.caption("You can upload another PDF if you like.")
 
-    st.divider()
+st.markdown("<h2 style='text-align:center'>AI Automation for Business</h2>", unsafe_allow_html=True)
+st.markdown(
+    "<p style='text-align:center;opacity:0.6'>Ask a question. Answers come only from the indexed PDFs.</p>",
+    unsafe_allow_html=True,
+)
 
-st.title("Ask anything about AI automation for businesses")
 
-
-async def send_rag_query_event(question: str, top_k: int) -> None:
+async def send_rag_query_event(question: str) -> None:
     client = get_inngest_client()
     result = await client.send(
         inngest.Event(
             name="rag/query_pdf_ai",
             data={
                 "question": question,
-                "top_k": top_k,
                 # Keys for the throttle and rate limit in main.py; without them all users share one bucket.
                 "session_id": st.session_state.session_id,
                 "user_id": st.session_state.session_id,
@@ -88,7 +90,8 @@ def _inngest_api_base() -> str:
 def fetch_runs(event_id: str) -> list[dict]:
     url = f"{_inngest_api_base()}/events/{event_id}/runs"
     key = os.getenv("INNGEST_SIGNING_KEY")
-    resp = requests.get(url, headers={"Authorization": f"Bearer {key}"} if key else {}, timeout=10)
+    # Inngest caches this endpoint ~15s per URL; a changing param makes each poll see fresh status.
+    resp = requests.get(url, params={"t": time.time_ns()}, headers={"Authorization": f"Bearer {key}"} if key else {}, timeout=10)
     resp.raise_for_status()
     data = resp.json()
     return data.get("data", [])
@@ -103,32 +106,40 @@ def wait_for_run_output(event_id: str, timeout_s: float = 120.0, poll_interval_s
             run = runs[0]
             status = run.get("status")
             last_status = status or last_status
-            if status in ("Completed", "Succeeded", "Success", "Finished"):
-                return run.get("output") or {}
+            # Inngest flips status to Completed slightly before it stores the output; keep polling until it's there.
+            if status in ("Completed", "Succeeded", "Success", "Finished") and run.get("output"):
+                return run["output"]
             if status in ("Failed", "Cancelled"):
                 raise RuntimeError(f"Function run {status}")
+        elif time.time() - start > 15:
+            # No run at all: backend down/unsynced, or the throttle/rate limit in main.py dropped it.
+            raise TimeoutError("No run started for this question. Is the backend running, or did you hit the rate limit?")
         if time.time() - start > timeout_s:
             raise TimeoutError(f"Timed out waiting for run output (last status: {last_status})")
         time.sleep(poll_interval_s)
 
 
-with st.form("rag_query_form"):
-    question = st.text_input("Your question", max_chars=500)
-    top_k = st.number_input("How many chunks to retrieve", min_value=1, max_value=20, value=4, step=1)
-    submitted = st.form_submit_button("Ask")
+question = st.chat_input("Ask anything about AI automation...", max_chars=500)
 
-    if submitted and question.strip():
-        with st.spinner("Sending event and generating answer..."):
+if question and question.strip():
+    with st.chat_message("user"):
+        st.markdown(question.strip())
+
+    with st.chat_message("assistant"):
+        with st.spinner("Thinking..."):
             # Fire-and-forget event to Inngest for observability/workflow
-            event_id = asyncio.run(send_rag_query_event(question.strip(), int(top_k)))
+            event_id = asyncio.run(send_rag_query_event(question.strip()))
             # Poll the local Inngest API for the run's output
-            output = wait_for_run_output(event_id)
+            try:
+                output = wait_for_run_output(event_id)
+            except (TimeoutError, RuntimeError) as e:
+                st.error(str(e))
+                st.stop()
             answer = output.get("answer", "")
             sources = output.get("sources", [])
 
-        st.subheader("Answer")
-        st.write(answer or "(No answer)")
+        st.markdown(answer or "(No answer)")
         if sources:
-            st.caption("Sources")
-            for s in sources:
-                st.write(f"- {s}")
+            with st.expander("Sources"):
+                for s in sources:
+                    st.markdown(f"- {s}")
