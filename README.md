@@ -11,20 +11,20 @@ Upload PDFs, then ask questions about them. Answers come from the retrieved chun
 ```mermaid
 flowchart LR
     U[User] --> S[Streamlit UI]
-    S -- "rag/ingest_file event" --> I[Inngest]
-    S -- "rag/query_pdf_ai event" --> I
-    I --> F[FastAPI functions<br/>main.py]
+    S -- "upload: rag/ingest_file event" --> I[Inngest]
+    S -- "question: POST /ask" --> F
+    I --> F[FastAPI<br/>main.py]
     F -- "chunk: SentenceSplitter 512/100" --> F
     F -- "embed: text-embedding-3-large" --> O[OpenAI]
     F -- "upsert / top-k search" --> Q[(Qdrant)]
     F -- "answer: gpt-4o-mini" --> O
-    S -. "poll run output" .-> I
 ```
 
 - **Ingest:** the PDF is saved, then split into 512-token chunks with 100-token overlap. Each chunk is embedded and upserted to Qdrant. Point IDs are deterministic, so re-uploading a file overwrites its chunks instead of duplicating them.
-- **Query:** the question is embedded and the top 4 chunks are retrieved. `gpt-4o-mini` answers from those chunks. The chunk count (`TOP_K` in `main.py`) is fixed in the backend, so users can't change it.
+- **Query:** the page calls the backend's `/ask` endpoint directly, so the answer comes back in about 2–3 seconds. The question is embedded and the top 4 chunks are retrieved. `gpt-4o-mini` answers from those chunks. The chunk count (`TOP_K` in `main.py`) is fixed in the backend, so users can't change it.
+- **Limits:** to cap OpenAI cost, each browser session gets 4 questions per 4 hours with at least 5 seconds between them, and the whole demo answers at most 200 questions per day. The limits are kept in memory, so they reset when the backend restarts. `/ask` isn't exposed to the internet; only the Streamlit page can reach it.
 - **Frontend:** a clean, ChatGPT-style Streamlit page. Questions go in a chat box pinned to the bottom, and the answer appears as a chat message with its sources in a collapsible section. PDF uploads live in the sidebar, and a light theme in `.streamlit/config.toml` handles the look without custom CSS.
-- **Why Inngest:** each step (embed-and-search, LLM call) is retried and logged on its own. Queries are throttled per session (1 every 5 s) and rate limited per session (4 every 4 h).
+- **Why Inngest:** ingestion can take a while on a large PDF, so it runs in the background, and each step (load-and-chunk, embed-and-upsert) is retried and logged on its own. Questions skip Inngest: waiting on its run API added up to 15 seconds per answer.
 
 ## Setup
 
@@ -40,7 +40,7 @@ npx inngest-cli@latest dev -u http://127.0.0.1:8000/api/inngest              # t
 uv run streamlit run streamlit_app.py                                        # terminal 4
 ```
 
-Open the Streamlit URL, upload a PDF, and ask a question. The Inngest dashboard at http://127.0.0.1:8288 shows each run step by step.
+Open the Streamlit URL, upload a PDF, and ask a question. The Inngest dashboard at http://127.0.0.1:8288 shows each ingestion step by step.
 
 ## Deploy (AWS)
 

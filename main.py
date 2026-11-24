@@ -1,15 +1,17 @@
 import logging
-from fastapi import FastAPI
+import threading
+import time
+from collections import defaultdict
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
 import inngest
 import inngest.fast_api
-from inngest.experimental import ai
 from dotenv import load_dotenv
-import uuid 
+import uuid
 import os
-import datetime 
-from custom_types import RAGQueryResult,RAGSearchResult,RAGUpertResult,RAGChunkAndSrc
+from custom_types import RAGUpertResult,RAGChunkAndSrc
 
-from data_loader import load_and_chunk_pdf, embed_texts
+from data_loader import client as openai_client, load_and_chunk_pdf, embed_texts
 from vector_db import QdrantStorage
 
 load_dotenv()
@@ -65,51 +67,60 @@ async def rag_ingest_file(ctx: inngest.Context):
     ingested = await ctx.step.run("embed-and-upsert", lambda: _upsert(chunks_and_src), output_type = RAGUpertResult)
     return ingested.model_dump()
 
-@inngest_client.create_function(
-    fn_id = "RAG: Query PEF",
-    trigger= inngest.TriggerEvent(event = "rag/query_pdf_ai"),
-    throttle=inngest.Throttle(
-        limit=1,
-        period=datetime.timedelta(seconds=5),
-        burst=2,
-        key="event.data.user_id",
-    ),
-    rate_limit=inngest.RateLimit(
-        limit=4,
-        period=datetime.timedelta(hours=4),
-        key="event.data.session_id",
-    ),
-    concurrency=[inngest.Concurrency(limit=10)],
-    
-)
-async def rag_query_pdf_ai(ctx: inngest.Context):
-    def _search(question: str, top_k: int) -> RAGSearchResult:
-        query_vec = embed_texts([question])[0]
-        store = QdrantStorage()
-        found = store.search(query_vec, top_k)
-        return RAGSearchResult(contexts = found["contexts"], sources = found["sources"])
+# Question limits, to cap OpenAI cost on the public demo.
+SESSION_LIMIT = 4                # questions per session...
+SESSION_WINDOW_S = 4 * 3600      # ...per 4 hours
+MIN_GAP_S = 5                    # seconds between questions in one session
+DAILY_LIMIT = 200                # questions per UTC day across all users
 
-    question = ctx.event.data["question"]
-    if len(question) > MAX_QUESTION_CHARS:
-        raise inngest.NonRetriableError(f"Question longer than {MAX_QUESTION_CHARS} characters")
+# shortcut: in-memory, so limits reset when the backend restarts and only work with one backend process; move to Redis/Postgres if it ever runs on several.
+_lock = threading.Lock()
+_session_times: dict[str, list[float]] = defaultdict(list)
+_daily = {"day": "", "count": 0}
 
-    found = await ctx.step.run("embed-and-search", lambda: _search(question, TOP_K), output_type = RAGSearchResult)
 
-    adapter = ai.openai.Adapter(
-        auth_key=os.getenv("OPENAI_API_KEY"),
-        model = CHAT_MODEL
-    )
+def check_limits(session_id: str, now: float) -> str | None:
+    """Record the question and return None if allowed, else a message saying why not."""
+    day = time.strftime("%Y-%m-%d", time.gmtime(now))
+    with _lock:
+        if _daily["day"] != day:
+            _daily.update(day=day, count=0)
+        if _daily["count"] >= DAILY_LIMIT:
+            return "The demo has reached its question limit for today. Please try again tomorrow."
+        times = [t for t in _session_times.get(session_id, []) if now - t < SESSION_WINDOW_S]
+        if times and now - times[-1] < MIN_GAP_S:
+            return "Please wait a few seconds between questions."
+        if len(times) >= SESSION_LIMIT:
+            minutes = int((times[0] + SESSION_WINDOW_S - now) // 60) + 1
+            return f"You've used your {SESSION_LIMIT} questions for now. You can ask again in about {minutes} minutes."
+        times.append(now)
+        _session_times[session_id] = times
+        _daily["count"] += 1
+        return None
 
-    res = await ctx.step.ai.infer(
-        "llm-answer",
-        adapter = adapter,
-        body={"max_tokens": 1024, "temperature": 0.2, "messages": build_messages(question, found.contexts)}
-    )
 
-    answer = res["choices"][0]["message"]["content"].strip()
-    return {"answer": answer,"sources": found.sources,"num_contexts": len(found.contexts)}
+class AskRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=MAX_QUESTION_CHARS)
+    session_id: str = Field(min_length=1, max_length=100)
+
 
 app = FastAPI()
 
-inngest.fast_api.serve (app, inngest_client, functions=[rag_ingest_file, rag_query_pdf_ai])
+
+# Not exposed to the internet: Caddy only proxies Streamlit, which calls this inside the Docker network.
+@app.post("/ask")
+def ask(req: AskRequest) -> dict:
+    question = req.question.strip()
+    if not question:
+        raise HTTPException(422, "Question is empty")
+    if (reason := check_limits(req.session_id, time.time())) is not None:
+        raise HTTPException(429, reason)
+    found = QdrantStorage().search(embed_texts([question])[0], TOP_K)
+    res = openai_client.chat.completions.create(
+        model=CHAT_MODEL, max_tokens=1024, temperature=0.2, messages=build_messages(question, found["contexts"])
+    )
+    return {"answer": res.choices[0].message.content.strip(), "sources": found["sources"]}
+
+
+inngest.fast_api.serve (app, inngest_client, functions=[rag_ingest_file])
 

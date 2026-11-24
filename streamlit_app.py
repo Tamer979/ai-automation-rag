@@ -65,59 +65,7 @@ st.markdown(
 )
 
 
-async def send_rag_query_event(question: str) -> None:
-    client = get_inngest_client()
-    result = await client.send(
-        inngest.Event(
-            name="rag/query_pdf_ai",
-            data={
-                "question": question,
-                # Keys for the throttle and rate limit in main.py; without them all users share one bucket.
-                "session_id": st.session_state.session_id,
-                "user_id": st.session_state.session_id,
-            },
-        )
-    )
-
-    return result[0]
-
-
-def _inngest_api_base() -> str:
-    # Local dev server default; configurable via env
-    return os.getenv("INNGEST_API_BASE", "http://127.0.0.1:8288/v1")
-
-
-def fetch_runs(event_id: str) -> list[dict]:
-    url = f"{_inngest_api_base()}/events/{event_id}/runs"
-    key = os.getenv("INNGEST_SIGNING_KEY")
-    # Inngest caches this endpoint ~15s per URL; a changing param makes each poll see fresh status.
-    resp = requests.get(url, params={"t": time.time_ns()}, headers={"Authorization": f"Bearer {key}"} if key else {}, timeout=10)
-    resp.raise_for_status()
-    data = resp.json()
-    return data.get("data", [])
-
-
-def wait_for_run_output(event_id: str, timeout_s: float = 120.0, poll_interval_s: float = 0.5) -> dict:
-    start = time.time()
-    last_status = None
-    while True:
-        runs = fetch_runs(event_id)
-        if runs:
-            run = runs[0]
-            status = run.get("status")
-            last_status = status or last_status
-            # Inngest flips status to Completed slightly before it stores the output; keep polling until it's there.
-            if status in ("Completed", "Succeeded", "Success", "Finished") and run.get("output"):
-                return run["output"]
-            if status in ("Failed", "Cancelled"):
-                raise RuntimeError(f"Function run {status}")
-        elif time.time() - start > 45:
-            # Must stay well past Inngest's ~15s API cache: self-hosted Inngest can hide a new run that long.
-            raise TimeoutError("Couldn't get an answer. The server may be busy or down, or you've hit the limit of 4 questions per 4 hours. Try again in a moment.")
-        if time.time() - start > timeout_s:
-            raise TimeoutError(f"Timed out waiting for run output (last status: {last_status})")
-        time.sleep(poll_interval_s)
-
+BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
 
 question = st.chat_input("Ask anything about AI automation...", max_chars=500)
 
@@ -127,14 +75,23 @@ if question and question.strip():
 
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            # Fire-and-forget event to Inngest for observability/workflow
-            event_id = asyncio.run(send_rag_query_event(question.strip()))
-            # Poll the local Inngest API for the run's output
             try:
-                output = wait_for_run_output(event_id)
-            except (TimeoutError, RuntimeError) as e:
-                st.error(str(e))
+                # session_id keys the per-session limits in main.py
+                resp = requests.post(
+                    f"{BACKEND_URL}/ask",
+                    json={"question": question.strip(), "session_id": st.session_state.session_id},
+                    timeout=60,
+                )
+            except requests.RequestException:
+                st.error("Can't reach the server right now. Please try again in a moment.")
                 st.stop()
+            if resp.status_code == 429:
+                st.error(resp.json()["detail"])
+                st.stop()
+            if not resp.ok:
+                st.error("Something went wrong while answering. Please try again in a moment.")
+                st.stop()
+            output = resp.json()
             answer = output.get("answer", "")
             sources = output.get("sources", [])
 

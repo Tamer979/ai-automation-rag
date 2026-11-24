@@ -22,5 +22,7 @@ jobs:
       - run: uv sync --frozen
       - name: Grader unit test
         run: uv run python -m evals.test_run_eval
+      - name: Question limits unit test
+        run: uv run python -m test_limits
       - name: Eval against the live Qdrant index
         run: uv run python -m evals.run_eval
