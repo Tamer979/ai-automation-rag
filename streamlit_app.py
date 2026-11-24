@@ -111,9 +111,9 @@ def wait_for_run_output(event_id: str, timeout_s: float = 120.0, poll_interval_s
                 return run["output"]
             if status in ("Failed", "Cancelled"):
                 raise RuntimeError(f"Function run {status}")
-        elif time.time() - start > 15:
-            # No run at all: backend down/unsynced, or the throttle/rate limit in main.py dropped it.
-            raise TimeoutError("No run started for this question. Is the backend running, or did you hit the rate limit?")
+        elif time.time() - start > 45:
+            # Must stay well past Inngest's ~15s API cache: self-hosted Inngest can hide a new run that long.
+            raise TimeoutError("Couldn't get an answer. The server may be busy or down, or you've hit the limit of 4 questions per 4 hours. Try again in a moment.")
         if time.time() - start > timeout_s:
             raise TimeoutError(f"Timed out waiting for run output (last status: {last_status})")
         time.sleep(poll_interval_s)
